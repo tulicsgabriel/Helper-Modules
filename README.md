@@ -109,6 +109,7 @@ import custom_metrics as my_metrics
 import anthropometric_indices as ai
 import lr_helper_kit as lr_kit
 import vif_analysis as vif
+import hypothesis_testing as ht
 ```
 
 

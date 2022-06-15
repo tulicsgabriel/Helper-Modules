@@ -6,15 +6,25 @@ This script provides a function that automatizes hypothesis testing of a
 dataframe colums selecting a grouping variable. Does normality testing, then
 two-sample t-test or Mann-Whitney U-test.
 
+Change log: 
+2022-05-15: Added  Levene’s test to check if the groups have equal variances.
+This is important for the assumptions of t-test.
+
+Added a two sample contingency test function to perform Chi-Square Test for
+contingency tables.
+
 @author: MIKLOS
 """
 
 import datetime
 import os
 import pandas as pd
+import numpy as np
 from scipy.stats import ttest_ind
+from scipy.stats import levene
 from scipy.stats import mannwhitneyu
 from scipy.stats import shapiro
+from scipy.stats import chi2_contingency
 
 
 def get_date_tag():
@@ -80,6 +90,10 @@ def two_sample_hypothesis_testing(df, features, group, alpha=0.05):
         "Feature": [],
         "Group 1": [],
         "Group 2": [],
+        "Group 1 mean": [],
+        "Group 2 mean": [],
+        "Group 1 std": [],
+        "Group 2 std": [],
         "Shapiro test p value group 1": [],
         "Shapiro test p value group 2": [],
         "Group 1 is_normal": [],
@@ -99,8 +113,15 @@ def two_sample_hypothesis_testing(df, features, group, alpha=0.05):
         d["Group 1"].append(group1_name)
         d["Group 2"].append(group2_name)
 
-        group1 = df[df[group] == list(set(list(df[group])))[0]][feature]
-        group2 = df[df[group] == list(set(list(df[group])))[1]][feature]
+        group1 = df[df[group] == list(set(list(df[group])))[0]][feature].dropna()
+        group2 = df[df[group] == list(set(list(df[group])))[1]][feature].dropna()
+
+        levene_stat, levene_p = levene(group1, group2)
+
+        d["Group 1 mean"].append(group1.mean())
+        d["Group 2 mean"].append(group2.mean())
+        d["Group 1 std"].append(group1.std())
+        d["Group 2 std"].append(group2.std())
 
         # normality test
         p_group1 = shapiro(group1)[1]
@@ -121,6 +142,7 @@ def two_sample_hypothesis_testing(df, features, group, alpha=0.05):
             and p_group2 > alpha
             and len(group1) > 30
             and len(group2) > 30
+            and levene_p > alpha
         ):
             d = two_sample_t_test(group1, group2, d, alpha)
         else:
@@ -140,6 +162,58 @@ def two_sample_hypothesis_testing(df, features, group, alpha=0.05):
 
     print("\n------------")
     print("Hypothesis testing done.\n")
+    return out_df
+
+
+def two_sample_contingency_test(df, features, group, alpha=0.05):
+    """Chi-Square Test for contingency table"""
+    d = {
+        "Feature": [],
+        "Group 1": [],
+        "Group 2": [],
+        "chi value": [],
+        "p-value": [],
+        "H0: no relation between the variables": [],
+        "H1: significant relationship between the variables": [],
+    }
+
+    for feature in features:
+
+        d["Feature"].append(feature)
+
+        group1_name = list(set(list(df[group])))[0]
+        group2_name = list(set(list(df[group])))[1]
+        d["Group 1"].append(group1_name)
+        d["Group 2"].append(group2_name)
+
+        contigency = pd.crosstab(df[group], df[feature])
+        chi, p_value, dof, expected = chi2_contingency(contigency)
+        d["chi value"].append(chi)
+        d["p-value"].append(p_value)
+
+        if p_value > alpha:
+            d["H0: no relation between the variables"].append(True)
+            d["H1: significant relationship between the variables"].append(False)
+        else:
+            d["H0: no relation between the variables"].append(False)
+            d["H1: significant relationship between the variables"].append(True)
+    out_df = pd.DataFrame(d)
+    out_df.style.apply(color_boolean)
+    hypot_folder = "./hypothesis_testing/"
+    if not os.path.exists(hypot_folder):
+        os.makedirs(hypot_folder)
+    date_tag = get_date_tag()
+    filename = "contingency_chisquare_by_" + group + "_" + date_tag + ".xlsx"
+    out_df.style.applymap(
+        color_boolean,
+        subset=[
+            "H0: no relation between the variables",
+            "H1: significant relationship between the variables",
+        ],
+    ).to_excel(hypot_folder + filename, index=False, freeze_panes=(1, 0))
+
+    print("\n------------")
+    print("Contingency chisquare testing done.\n")
     return out_df
 
 

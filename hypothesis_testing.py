@@ -6,7 +6,7 @@ This script provides a function that automatizes hypothesis testing of a
 dataframe colums selecting a grouping variable. Does normality testing, then
 two-sample t-test or Mann-Whitney U-test.
 
-Change log: 
+Change log:
 2022-05-15: Added  Levene’s test to check if the groups have equal variances.
 this is important for the assumptions of t-test.
 
@@ -14,6 +14,8 @@ Added a two sample contingency test function to perform Chi-Square Test for
 contingency tables.
 
 2022-09-12: Added frequency columns for the contingency test table.
+2022-09-13: Modified frequency columns because Counter function didn't catch
+    some cases.
 
 @author: MIKLOS
 """
@@ -21,8 +23,6 @@ contingency tables.
 import datetime
 import os
 import pandas as pd
-import numpy as np
-from collections import Counter
 
 from scipy.stats import ttest_ind
 from scipy.stats import levene
@@ -58,7 +58,7 @@ def color_boolean(val):
 
 def two_sample_t_test(group1, group2, d, alpha):
     """Gets two-sample t-test"""
-    t_value, p_value = ttest_ind(group1, group2)
+    _, p_value = ttest_ind(group1, group2)
     d["t-test p value"].append(p_value)
 
     if p_value > alpha:
@@ -72,7 +72,7 @@ def two_sample_t_test(group1, group2, d, alpha):
 
 def two_sample_wilcoxon_test(group1, group2, d, alpha):
     """Gets two sample Mann-Whitney U test"""
-    statistic, p_value = mannwhitneyu(group1, group2, alternative="two-sided")
+    _, p_value = mannwhitneyu(group1, group2, alternative="two-sided")
     d["Mann-Whitney U test p value"].append(p_value)
 
     if p_value > alpha:
@@ -120,7 +120,7 @@ def two_sample_hypothesis_testing(df, features, group, alpha=0.05):
         group1 = df[df[group] == list(set(list(df[group])))[0]][feature].dropna()
         group2 = df[df[group] == list(set(list(df[group])))[1]][feature].dropna()
 
-        levene_stat, levene_p = levene(group1, group2)
+        _, levene_p = levene(group1, group2)
 
         d["Group 1 mean"].append(group1.mean())
         d["Group 2 mean"].append(group2.mean())
@@ -152,6 +152,7 @@ def two_sample_hypothesis_testing(df, features, group, alpha=0.05):
         else:
             d = two_sample_wilcoxon_test(group1, group2, d, alpha)
     out_df = pd.DataFrame(d)
+    out_df = out_df.round(3)
     out_df.style.apply(color_boolean)
 
     hypot_folder = "./hypothesis_testing/"
@@ -192,11 +193,20 @@ def two_sample_contingency_test(df, features, group, alpha=0.05):
         d["Group 1"].append(group1_name)
         d["Group 2"].append(group2_name)
 
-        d["Group 1 freq."].append(Counter(df[df[group] == group1_name][feature])[1])
-        d["Group 2 freq."].append(Counter(df[df[group] == group2_name][feature])[1])
-
+        if 1 in df[df[group] == group1_name][feature].value_counts().keys():
+            d["Group 1 freq."].append(
+                df[df[group] == group1_name][feature].value_counts()[1]
+            )
+        else:
+            d["Group 1 freq."].append(0)
+        if 1 in df[df[group] == group2_name][feature].value_counts().keys():
+            d["Group 2 freq."].append(
+                df[df[group] == group2_name][feature].value_counts()[1]
+            )
+        else:
+            d["Group 2 freq."].append(0)
         contigency = pd.crosstab(df[group], df[feature])
-        chi, p_value, dof, expected = chi2_contingency(contigency)
+        chi, p_value, _, _ = chi2_contingency(contigency)
         d["chi value"].append(chi)
         d["p-value"].append(p_value)
 
@@ -207,6 +217,8 @@ def two_sample_contingency_test(df, features, group, alpha=0.05):
             d["H0: no relation between the variables"].append(False)
             d["H1: significant relationship between the variables"].append(True)
     out_df = pd.DataFrame(d)
+    out_df = out_df.round(3)
+
     out_df.style.apply(color_boolean)
     hypot_folder = "./hypothesis_testing/"
     if not os.path.exists(hypot_folder):
@@ -248,13 +260,14 @@ def main():
         "weight": [80, 61, 59, 85, 55, 55, 81, 65, 60, 88],
         "ac": [94, 80, 82, 84, 88, 77, 62, 64, 87, 100],
         "brown_hair": [1, 0, 0, 1, 0, 1, 1, 1, 0, 1],
+        "married": [0, 1, 0, 0, 0, 0, 0, 1, 0, 0],
     }
     df = pd.DataFrame(data)
 
     out_df = two_sample_hypothesis_testing(df, ["height", "weight", "age"], "sex")
     print(out_df)
-    
-    out_df_cont = two_sample_contingency_test(df, ["brown_hair"], "sex")
+
+    out_df_cont = two_sample_contingency_test(df, ["brown_hair", "married"], "sex")
     print(out_df_cont)
 
 

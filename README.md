@@ -47,6 +47,7 @@ Functions:
 - two_sample_t_test: Gets two-sample t-test
 - two_sample_wilcoxon_test: Gets two sample Mann-Whitney U test
 - two_sample_hypothesis_testing: Helper function to run the two-sample hypothesis tests feature by feature. It also checks the assumptions of the two sample t-test and runs the mann-whitney u test if the assumptions are violated.
+- two_sample_contingency_test: Function to run chi-Square Test for contingency table
 
 
 ### custom_metrics
